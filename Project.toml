@@ -3,6 +3,9 @@ uuid = "71dbed6d-20b0-48c6-bb22-c3e423edce76"
 authors = ["Albin Severinson <albin@severinson.org> and contributors"]
 version = "0.1.0"
 
+[deps]
+MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
+
 [compat]
 julia = "1"
 
