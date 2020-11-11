@@ -36,7 +36,6 @@ function root_main()
         end
         from_this_epoch = 0
         for i in 1:nworkers
-            # print("test $rank: rec. $(recvbufs[i]) from worker $i\n")
             wrank, t, wepoch = recvbufs[i]
 
             # no tests if we've never received from this worker
