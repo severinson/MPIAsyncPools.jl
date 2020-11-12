@@ -1,5 +1,5 @@
 using MPI
-using MPIutils
+using MPIStragglers
 
 MPI.Init()
 const comm = MPI.COMM_WORLD

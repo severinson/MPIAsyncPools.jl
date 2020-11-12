@@ -1,5 +1,5 @@
 using MPI
-using MPIutils
+using MPIStragglers
 using Statistics
 
 MPI.Init()
