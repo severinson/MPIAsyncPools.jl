@@ -20,7 +20,7 @@ struct StragglerPool
     end
 end
 
-StragglerPool(n::Integer) = StragglerPool(collect(1:n))
+StragglerPool(n::Integer, args...; kwargs...) = StragglerPool(collect(1:n), args...; kwargs...)
 
 """
     kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, k::Integer, epoch::Integer, pool::StragglerPool, comm::MPI.Comm)
