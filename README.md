@@ -1,4 +1,4 @@
-# MPIStragglers
+# MPIStragglers.jl
 
 This function exports a function `kmap!` for distributing work over straggling workers.
 
