@@ -25,8 +25,7 @@ function delay_samples(k::Integer; pool::StragglerPool, nsamples=100)
     irecvbuf = copy(recvbuf)
     samples = zeros(nsamples)
     for i in 1:nsamples
-        epoch = i
-        # kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, k, epoch, pool, comm; tag=data_tag)
+        epoch = i        
         samples[i] = @elapsed kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, k, epoch, pool, comm; tag=data_tag)
     end
     samples
@@ -39,7 +38,7 @@ function root_main()
     delay_samples(nworkers; pool)
     for k in 1:nworkers
         delay_samples(k; pool, nsamples=10)        
-    end    
+    end
 
     print("starting test\n")
     samples = zeros(nworkers)
@@ -65,7 +64,6 @@ function worker_main()
             break
         end
         sendbuf .= recvbuf
-        # sleep(max(rand()/10, 0.005))
         sreq = MPI.Isend(sendbuf, root, data_tag, comm)
     end
 end
