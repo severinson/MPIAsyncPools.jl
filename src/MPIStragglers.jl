@@ -1,17 +1,17 @@
-module MPIutils
+module MPIStragglers
 
 using MPI
 
-export WorkerPool, kmap!
+export StragglerPool, kmap!
 
-struct WorkerPool
+struct StragglerPool
     ranks::Vector{Int}
     sreqs::Vector{MPI.Request}
     rreqs::Vector{MPI.Request}
     sepochs::Vector{Int}
     repochs::Vector{Int}
     active::Vector{Bool}
-    function WorkerPool(ranks::Vector{<:Integer}, epoch0::Integer=0)
+    function StragglerPool(ranks::Vector{<:Integer}, epoch0::Integer=0)
         n = length(ranks)
         new(copy(ranks),
             Vector{MPI.Request}(undef, n), Vector{MPI.Request}(undef, n),
@@ -20,10 +20,10 @@ struct WorkerPool
     end
 end
 
-WorkerPool(n::Integer) = WorkerPool(collect(1:n))
+StragglerPool(n::Integer) = StragglerPool(collect(1:n))
 
 """
-    kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, k::Integer, epoch::Integer, pool::WorkerPool, comm::MPI.Comm)
+    kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, k::Integer, epoch::Integer, pool::StragglerPool, comm::MPI.Comm)
 
 Send the data in `sendbuf` asynchronously (via `MPI.Isend`) to all workers and wait for the fastest `k` workers to respond
 (via a corresponding `MPI.Isend`). For iterative algorithms, `epoch` should be the iteration that the data in `sendbuf` corresponds to.
@@ -37,7 +37,7 @@ The buffers `isendbuf` and `irecvbuf` are for internal use by this function only
 The length of `isendbuf` must be equal to the length of `sendbuf` multiplied by the number of workers, and `irecvbuf` must have length 
 equal to that of `recvbuf`.
 """
-function kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, k::Integer, epoch::Integer, pool::WorkerPool, comm::MPI.Comm; tag::Integer=0)
+function kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, k::Integer, epoch::Integer, pool::StragglerPool, comm::MPI.Comm; tag::Integer=0)
     comm_size = length(pool.ranks)
     0 <= k <= comm_size || throw(ArgumentError("k must be in the range [0, length(pool.ranks)]"))
     length(isendbuf) == comm_size*length(sendbuf) || throw(DimensionMismatch("sendbuf has $(length(sendbuf)) elements, but isendbuf has $(length(isendbuf)) elements when $(comm_size*length(sendbuf)) are needed"))

@@ -12,13 +12,13 @@ const data_tag = 0
 const control_tag = 1
 const nelems = 100 # number of 64-bit floats sent in each direction per iteration and worker
 
-function shutdown(pool::WorkerPool)
+function shutdown(pool::StragglerPool)
     for i in pool.ranks
         MPI.Isend(zeros(1), i, control_tag, comm)
     end
 end
 
-function delay_samples(k::Integer; pool::WorkerPool, nsamples=100)
+function delay_samples(k::Integer; pool::StragglerPool, nsamples=100)
     sendbuf = Vector{Float64}(undef, nelems)
     isendbuf = Vector{Float64}(undef, nworkers*length(sendbuf))
     recvbuf = Vector{Float64}(undef, nworkers*nelems)
@@ -33,7 +33,7 @@ function delay_samples(k::Integer; pool::WorkerPool, nsamples=100)
 end
 
 function root_main()
-    pool = WorkerPool(nworkers)
+    pool = StragglerPool(nworkers)
     print("test $rank: root starting\n")    
     print("warming up\n")
     delay_samples(nworkers; pool)

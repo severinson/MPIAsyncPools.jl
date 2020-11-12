@@ -1,5 +1,5 @@
 using MPI
-using MPIutils
+using MPIStragglers
 using Test
 
 MPI.Init()
@@ -11,14 +11,14 @@ isroot() = MPI.Comm_rank(comm) == root
 const data_tag = 0
 const control_tag = 1
 
-function shutdown(pool::WorkerPool)
+function shutdown(pool::StragglerPool)
     for i in pool.ranks
         MPI.Isend(zeros(1), i, control_tag, comm)
     end
 end
 
 function root_main()
-    pool = WorkerPool(nworkers)
+    pool = StragglerPool(nworkers)
     @test pool.ranks == collect(1:nworkers)
 
     sendbuf = Vector{Float64}(undef, 1)

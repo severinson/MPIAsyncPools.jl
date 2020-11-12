@@ -11,13 +11,13 @@ const data_tag = 0
 const control_tag = 1
 const nelems = 10 # number of 64-bit floats sent in each direction per iteration and worker
 
-function shutdown(pool::WorkerPool)
+function shutdown(pool::StragglerPool)
     for i in pool.ranks
         MPI.Isend(zeros(1), i, control_tag, comm)
     end
 end
 
-function root_main(k::Integer; pool::WorkerPool, nsamples=10000)
+function root_main(k::Integer; pool::StragglerPool, nsamples=10000)
     sendbuf = Vector{Float64}(undef, nelems)
     isendbuf = Vector{Float64}(undef, nworkers*length(sendbuf))
     recvbuf = Vector{Float64}(undef, nworkers*nelems)
@@ -46,7 +46,7 @@ end
 
 using Profile
 if isroot()    
-    pool = WorkerPool(nworkers)
+    pool = StragglerPool(nworkers)
     k = nworkers
     @profile root_main(k; pool) # run once to trigger compilation (ignore this one)
     Profile.clear()

@@ -1,4 +1,4 @@
-using MPIutils
+using MPIStragglers
 using Test
 using MPI
 
