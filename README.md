@@ -1,6 +1,6 @@
 # MPIStragglers.jl
 
-This function exports a function `kmap!` for distributing work over straggling workers.
+This package exports a function `kmap!` for distributing work over straggling workers.
 
 > `kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, k::Integer, epoch::Integer, pool::StragglerPool, comm::MPI.Comm)`
 >
