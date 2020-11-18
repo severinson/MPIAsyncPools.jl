@@ -37,12 +37,14 @@ The buffers `isendbuf` and `irecvbuf` are for internal use by this function only
 The length of `isendbuf` must be equal to the length of `sendbuf` multiplied by the number of workers, and `irecvbuf` must have length 
 equal to that of `recvbuf`.
 """
-function kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, k::Integer, epoch::Integer, pool::StragglerPool, comm::MPI.Comm; tag::Integer=0)
+function kmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, k::Integer, epoch::Integer, pool::StragglerPool, comm::MPI.Comm; tag::Integer=0)
     comm_size = length(pool.ranks)
     0 <= k <= comm_size || throw(ArgumentError("k must be in the range [0, length(pool.ranks)]"))
-    length(isendbuf) == comm_size*length(sendbuf) || throw(DimensionMismatch("sendbuf has $(length(sendbuf)) elements, but isendbuf has $(length(isendbuf)) elements when $(comm_size*length(sendbuf)) are needed"))
-    length(recvbuf) == length(irecvbuf) || throw(DimensionMismatch("recvbuf has $(length(recvbuf)) elements, but irecvbuf has $(length(irecvbuf)) elements"))
-    mod(length(recvbuf), comm_size) == 0 || throw(DimensionMismatch("the length of recvbuf and irecvbuf must be a multiple of the number of workers"))
+    isbitstype(eltype(sendbuf)) || throw(ArgumentError("The eltype of sendbuf must be isbits, but is $(eltype(sendbuf))"))
+    isbitstype(eltype(recvbuf)) || throw(ArgumentError("The eltype of sendbuf must be isbits, but is $(eltype(recvbuf))"))
+    sizeof(isendbuf) == comm_size*sizeof(sendbuf) || throw(DimensionMismatch("sendbuf is of size $(sizeof(sendbuf)) bytes, but isendbuf is of size $(sizeof(isendbuf)) bytes when $(comm_size*sizeof(sendbuf)) bytes are needed"))
+    sizeof(recvbuf) == sizeof(irecvbuf) || throw(DimensionMismatch("recvbuf is of size $(sizeof(recvbuf)) bytes, but irecvbuf is of size $(sizeof(irecvbuf)) bytes"))
+    mod(length(recvbuf), comm_size) == 0 || throw(DimensionMismatch("The length of recvbuf and irecvbuf must be a multiple of the number of workers"))
 
     # send/receive buffers for each worker
     sl = length(sendbuf)
