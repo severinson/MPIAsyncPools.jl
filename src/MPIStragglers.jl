@@ -11,12 +11,14 @@ struct StragglerPool
     sepochs::Vector{Int}
     repochs::Vector{Int}
     active::Vector{Bool}
-    function StragglerPool(ranks::Vector{<:Integer}, epoch0::Integer=0)
+    nwait::Integer # default number of workers to wait for
+    function StragglerPool(ranks::Vector{<:Integer}; epoch0::Integer=0, nwait=length(ranks))
         n = length(ranks)
         new(copy(ranks),
             Vector{MPI.Request}(undef, n), Vector{MPI.Request}(undef, n),
             Vector{Int}(undef, n), fill(epoch0, n),
-            zeros(Bool, n))
+            zeros(Bool, n),
+            nwait)
     end
 end
 
@@ -107,5 +109,7 @@ function kmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::Abstrac
 
     return pool.repochs
 end
+
+kmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, epoch::Integer, pool::StragglerPool, comm::MPI.Comm; tag::Integer=0) = kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, pool.nwait, epoch, pool, comm; tag)
 
 end
