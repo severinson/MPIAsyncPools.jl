@@ -67,7 +67,7 @@ function kmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::Abstrac
         rank = pool.ranks[i]
 
         # copy send data to a worker-specific buffer to ensure the data isn't changed while sending
-        isendbufs[i] .= sendbuf
+        isendbufs[i] .= view(sendbuf, :)
 
         # remember at what epoch data was sent
         pool.sepochs[i] = epoch
@@ -97,7 +97,7 @@ function kmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::Abstrac
                 nrecv += 1
                 pool.active[i] = false
             else
-                isendbufs[i] .= sendbuf 
+                isendbufs[i] .= view(sendbuf, :)
                 pool.sepochs[i] = epoch
                 pool.sreqs[i] = MPI.Isend(isendbufs[i], rank, tag, comm)
                 pool.rreqs[i] = MPI.Irecv!(irecvbufs[i], rank, tag, comm)
