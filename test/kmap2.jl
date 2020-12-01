@@ -26,9 +26,10 @@ function root_main()
     recvbuf = Vector{Float64}(undef, 3*nworkers)
     recvbufs = [view(recvbuf, (i-1)*3+1:i*3) for i in 1:nworkers]
     irecvbuf = copy(recvbuf)
-    k = 4
+    k = 2
     print("test $rank: root starting\n")
 
+    # test that we have at least k responses from the current epoch in each iteration
     for epoch in 1:100
         sendbuf[1] = epoch
         delay = @elapsed begin
@@ -50,10 +51,20 @@ function root_main()
             @test wepoch == repochs[i]
         end
 
-        # test that we have at least k responses from this epoch
         @test from_this_epoch >= k
         print("test $rank: response from $from_this_epoch workers in $delay seconds\n")    
-    end    
+    end
+
+    # test using a custom function to determine when kmap! should return
+    # (in this case that the first worker has returned)
+    f = (epoch, repochs) -> repochs[1] == epoch
+    for epoch in 101:200
+        delay = @elapsed begin
+            repochs = kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, f, epoch, pool, comm; tag=data_tag)
+        end
+        @test repochs[1] == epoch
+        print("test $rank: response from the first worker in $delay seconds\n")    
+    end
     shutdown(pool)
 end
 

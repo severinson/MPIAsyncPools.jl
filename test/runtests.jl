@@ -26,7 +26,7 @@ mpitestexec(n::Integer, file::String) = mpiexec(cmd -> read(`$cmd -n $n --mca bt
         println((rank, line))
     end
 
-    n = 5
+    n = 3
     for line in split(mpitestexec(n, "kmap2.jl"), "\n")
         rank, output = parse_line(line)
         if rank == -1

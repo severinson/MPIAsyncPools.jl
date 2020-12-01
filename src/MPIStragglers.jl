@@ -25,23 +25,31 @@ end
 StragglerPool(n::Integer, args...; kwargs...) = StragglerPool(collect(1:n), args...; kwargs...)
 
 """
-    kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, k::Integer, epoch::Integer, pool::StragglerPool, comm::MPI.Comm)
+    kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, nwait::Union{<:Integer,Function}, epoch::Integer, pool::StragglerPool, comm::MPI.Comm)
 
-Send the data in `sendbuf` asynchronously (via `MPI.Isend`) to all workers and wait for the fastest `k` workers to respond
-(via a corresponding `MPI.Isend`). For iterative algorithms, `epoch` should be the iteration that the data in `sendbuf` corresponds to.
+Send the data in `sendbuf` asynchronously (via `MPI.Isend`) to all workers and wait for some of
+them to respond (via a corresponding `MPI.Isend`). If `nwait` is an integer, this function returns 
+when at least `nwait` workers have responded. On the other hand, if `nwait` is a function, this 
+function returns once `nwait(epoch, repochs)` evaluates to `true`. The second argument `repochs` is 
+a vector of length equal to the number of workers in the pool, where the `i`-th element is the 
+`epoch` that transmission to the corresponding worker was initiated at. For iterative algorithms, 
+`epoch` should be the iteration that the data in `sendbuf` corresponds to.
 
-Returns a vector of length equal to the number of workers in the pool, where the `i`-th element is the `epoch` that transmission to 
-that worker was initiated at. Similarly to the `MPI.Gather!` function, the elements of `recvbuf` are partitioned into a number of chunks 
-equal to the number of workers (hence, the length of `recvbuf` must be divisible by the number of workers) and the data recieved from the
- `j`-th worker is stored in the `j`-th partition.
+Returns the `repochs` vector. Similarly to the `MPI.Gather!` function, the elements of `recvbuf` 
+are partitioned into a number of chunks equal to the number of workers (hence, the length of 
+`recvbuf` must be divisible by the number of workers) and the data recieved from the `j`-th worker 
+is stored in the `j`-th partition.
 
-The buffers `isendbuf` and `irecvbuf` are for internal use by this function only and should never be changed or accessed outside of it.
-The length of `isendbuf` must be equal to the length of `sendbuf` multiplied by the number of workers, and `irecvbuf` must have length 
-equal to that of `recvbuf`.
+The buffers `isendbuf` and `irecvbuf` are for internal use by this function only and should never 
+be changed or accessed outside of it. The length of `isendbuf` must be equal to the length of 
+`sendbuf` multiplied by the number of workers, and `irecvbuf` must have length equal to that of 
+`recvbuf`.
 """
-function kmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, k::Integer, epoch::Integer, pool::StragglerPool, comm::MPI.Comm; tag::Integer=0)
+function kmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, nwait::Union{<:Integer,Function}, epoch::Integer, pool::StragglerPool, comm::MPI.Comm; tag::Integer=0)
     comm_size = length(pool.ranks)
-    0 <= k <= comm_size || throw(ArgumentError("k must be in the range [0, length(pool.ranks)]"))
+    if typeof(nwait) <: Integer
+        0 <= nwait <= comm_size || throw(ArgumentError("nwait must be in the range [0, length(pool.ranks)], but is $nwait"))
+    end
     isbitstype(eltype(sendbuf)) || throw(ArgumentError("The eltype of sendbuf must be isbits, but is $(eltype(sendbuf))"))
     isbitstype(eltype(recvbuf)) || throw(ArgumentError("The eltype of sendbuf must be isbits, but is $(eltype(recvbuf))"))
     sizeof(isendbuf) == comm_size*sizeof(sendbuf) || throw(DimensionMismatch("sendbuf is of size $(sizeof(sendbuf)) bytes, but isendbuf is of size $(sizeof(isendbuf)) bytes when $(comm_size*sizeof(sendbuf)) bytes are needed"))
@@ -79,10 +87,25 @@ function kmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::Abstrac
         pool.rreqs[i] = MPI.Irecv!(irecvbufs[i], rank, tag, comm)
     end
 
-    # continually send and receive until we've collected at least k responses from this epoch
+    # continually send and receive until,
+    # 1) if nwait is an integer, we've received nwait results from this epoch, or
+    # 2) if nwait is a function, when nwait(epoch, repochs) evaluates to true.
     # at least k workers are inactive after this loop
     nrecv = 0
-    while nrecv < k
+    while true
+
+        if typeof(nwait) <: Integer
+            if nrecv >= nwait
+                break            
+            end
+        elseif typeof(nwait) <: Function 
+            if nwait(epoch, pool.repochs)::Bool
+                break
+            end
+        else
+            error("nwait must be either an Integer or a Function, but is a $(typeof(nwait))")
+        end
+
         indices, _ = MPI.Waitsome!(pool.rreqs)
         for i in indices
             rank = pool.ranks[i]
