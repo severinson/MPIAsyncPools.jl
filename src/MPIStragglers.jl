@@ -38,7 +38,7 @@ end
 AsyncPool(n::Integer, args...; kwargs...) = AsyncPool(collect(1:n), args...; kwargs...)
 
 """
-    asyncmap!(sendbuf, recvbuf, isendbuf, irecvbuf, nwait::Union{<:Integer,Function}, epoch::Integer, pool::AsyncPool, comm::MPI.Comm)
+    asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, comm::MPI.Comm; nwait::Union{<:Integer,Function}=pool.nwait, epoch::Integer, tag::Integer=0)
 
 Send the data in `sendbuf` asynchronously (via `MPI.Isend`) to all workers and wait for some of
 them to respond (via a corresponding `MPI.Isend`). If `nwait` is an integer, this function returns 
@@ -58,7 +58,7 @@ be changed or accessed outside of it. The length of `isendbuf` must be equal to 
 `sendbuf` multiplied by the number of workers, and `irecvbuf` must have length equal to that of 
 `recvbuf`.
 """
-function asyncmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, nwait::Union{<:Integer,Function}, epoch::Integer, pool::AsyncPool, comm::MPI.Comm; tag::Integer=0)
+function Base.asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, comm::MPI.Comm; nwait::Union{<:Integer,Function}=pool.nwait, epoch::Integer, tag::Integer=0)
     comm_size = length(pool.ranks)
     if typeof(nwait) <: Integer
         0 <= nwait <= comm_size || throw(ArgumentError("nwait must be in the range [0, length(pool.ranks)], but is $nwait"))
@@ -145,7 +145,5 @@ function asyncmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::Abs
 
     return pool.repochs
 end
-
-asyncmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, epoch::Integer, pool::AsyncPool, comm::MPI.Comm; tag::Integer=0) = asyncmap!(sendbuf, recvbuf, isendbuf, irecvbuf, pool.nwait, epoch, pool, comm; tag)
 
 end

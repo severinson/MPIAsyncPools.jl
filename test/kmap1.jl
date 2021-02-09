@@ -12,14 +12,14 @@ const count = 1
 const tag = 0
 
 if isroot()
-    pool = StragglerPool(nworkers)
+    pool = AsyncPool(nworkers)
     sendbuf = repeat([3.14], count)
     isendbuf = zeros(eltype(sendbuf), nworkers*length(sendbuf))
     recvbuf = Vector{Float64}(undef, nworkers)
     irecvbuf = copy(recvbuf)
-    k = nworkers
+    nwait = nworkers
     epoch = 0
-    repochs = kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, k, epoch, pool, comm; tag)
+    repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait, epoch, tag)
     @test recvbuf ≈ collect(1:nworkers)
 else    
     recvbuf = Vector{Float64}(undef, 1)

@@ -11,14 +11,14 @@ isroot() = MPI.Comm_rank(comm) == root
 const data_tag = 0
 const control_tag = 1
 
-function shutdown(pool::StragglerPool)
+function shutdown(pool::AsyncPool)
     for i in pool.ranks
         MPI.Isend(zeros(1), i, control_tag, comm)
     end
 end
 
 function root_main()
-    pool = StragglerPool(nworkers)
+    pool = AsyncPool(nworkers)
     @test pool.ranks == collect(1:nworkers)
 
     sendbuf = Vector{Float64}(undef, 1)
@@ -26,14 +26,14 @@ function root_main()
     recvbuf = Vector{Float64}(undef, 3*nworkers)
     recvbufs = [view(recvbuf, (i-1)*3+1:i*3) for i in 1:nworkers]
     irecvbuf = copy(recvbuf)
-    k = 2
+    nwait = 2
     print("test $rank: root starting\n")
 
-    # test that we have at least k responses from the current epoch in each iteration
+    # test that we have at least nwait responses from the current epoch in each iteration
     for epoch in 1:100
         sendbuf[1] = epoch
         delay = @elapsed begin
-            repochs = kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, k, epoch, pool, comm; tag=data_tag)
+            repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait, epoch, tag=data_tag)
         end
         from_this_epoch = 0
         for i in 1:nworkers
@@ -51,16 +51,17 @@ function root_main()
             @test wepoch == repochs[i]
         end
 
-        @test from_this_epoch >= k
+        @test from_this_epoch >= nwait
         print("test $rank: response from $from_this_epoch workers in $delay seconds\n")    
     end
 
-    # test using a custom function to determine when kmap! should return
+    # test using a custom function to determine when asyncmap! should return
     # (in this case that the first worker has returned)
     f = (epoch, repochs) -> repochs[1] == epoch
     for epoch in 101:200
         delay = @elapsed begin
-            repochs = kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, f, epoch, pool, comm; tag=data_tag)
+            # repochs = asyncmap!(sendbuf, recvbuf, isendbuf, irecvbuf, f, epoch, pool, comm; tag=data_tag)
+            repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait=f, epoch, tag=data_tag)            
         end
         @test repochs[1] == epoch
         print("test $rank: response from the first worker in $delay seconds\n")    

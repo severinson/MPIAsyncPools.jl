@@ -16,7 +16,7 @@ end
 
 mpitestexec(n::Integer, file::String) = mpiexec(cmd -> read(`$cmd -n $n --mca btl ^openib julia --project $file`, String))
 
-@testset "kmap.jl" begin
+@testset "MPIStragglers.jl" begin
     n = 3
     for line in split(mpitestexec(n, "kmap1.jl"), "\n")
         rank, output = parse_line(line)
