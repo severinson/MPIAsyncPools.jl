@@ -52,7 +52,7 @@ function root_main()
         end
 
         @test from_this_epoch >= nwait
-        print("test $rank: response from $from_this_epoch workers in $delay seconds\n")    
+        print("test $rank: response from $from_this_epoch workers in $delay seconds\n")
     end
 
     # test that all workers have returned after calling waitall!
@@ -70,7 +70,8 @@ function root_main()
             repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait=f, tag=data_tag)
         end
         @test repochs[1] == pool.epoch
-        print("test $rank: response from the first worker in $delay seconds\n")    
+        @test isapprox(delay, pool.latency[1], atol=1e-3)
+        print("test $rank: response from the first worker in $delay ($(pool.latency[1])) seconds\n")
     end
     shutdown(pool)
 end

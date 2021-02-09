@@ -24,6 +24,8 @@ mutable struct AsyncPool
     sepochs::Vector{Int}
     repochs::Vector{Int}
     active::Vector{Bool}
+    stimestamps::Vector{Int}
+    latency::Vector{Float64}
     nwait::Int # default number of workers to wait for
     epoch::Int # current epoch
     function AsyncPool(ranks::Vector{<:Integer}; epoch0::Integer=0, nwait=length(ranks))
@@ -32,6 +34,7 @@ mutable struct AsyncPool
             Vector{MPI.Request}(undef, n), Vector{MPI.Request}(undef, n),
             Vector{Int}(undef, n), fill(epoch0, n),
             zeros(Bool, n),
+            zeros(UInt64, n), zeros(Float64, n),
             nwait, epoch0)
     end
 end
@@ -99,6 +102,7 @@ function Base.asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::Abstra
         pool.sepochs[i] = pool.epoch
 
         # non-blocking send and receive
+        pool.stimestamps[i] = time_ns()
         pool.sreqs[i] = MPI.Isend(isendbufs[i], rank, tag, comm)
         pool.rreqs[i] = MPI.Irecv!(irecvbufs[i], rank, tag, comm)
     end
@@ -122,11 +126,18 @@ function Base.asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::Abstra
             error("nwait must be either an Integer or a Function, but is a $(typeof(nwait))")
         end
 
+        # block until we've received at least 1 response
         indices, _ = MPI.Waitsome!(pool.rreqs)
-        for i in indices
-            rank = pool.ranks[i]
 
-            # store the received data and set the epoch
+        # record latency
+        for i in indices
+            pool.latency[i] = (time_ns() - pool.stimestamps[i]) / 1e9
+        end            
+
+        # store the received data
+        for i in indices
+
+            # store the received data and set the epoch            
             recvbufs[i] .= irecvbufs[i]
             pool.repochs[i] = pool.sepochs[i]
 
@@ -138,8 +149,10 @@ function Base.asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::Abstra
                 nrecv += 1
                 pool.active[i] = false
             else
-                isendbufs[i] .= reinterpret(UInt8, view(sendbuf, :))
+                isendbufs[i] .= view(reinterpret(UInt8, sendbuf), :)
                 pool.sepochs[i] = pool.epoch
+                rank = pool.ranks[i]           
+                pool.stimestamps[i] = time_ns()
                 pool.sreqs[i] = MPI.Isend(isendbufs[i], rank, tag, comm)
                 pool.rreqs[i] = MPI.Irecv!(irecvbufs[i], rank, tag, comm)
             end
@@ -174,6 +187,7 @@ function waitall!(pool::AsyncPool, recvbuf::AbstractArray, irecvbuf::AbstractArr
     MPI.Waitall!(pool.rreqs)
     for i in 1:length(pool.ranks)
         if pool.active[i]
+            pool.latency[i] = (time_ns() - pool.stimestamps[i]) / 1e9
             recvbufs[i] .= irecvbufs[i]
             pool.repochs[i] = pool.sepochs[i]
             pool.active[i] = false
