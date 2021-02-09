@@ -18,14 +18,14 @@ AsyncPool([1, 4, 5])    # create a pool composed of 3 workers with ranks [1, 4, 
 ```
 """
 mutable struct AsyncPool
-    ranks::Vector{Int}
-    sreqs::Vector{MPI.Request}
-    rreqs::Vector{MPI.Request}
-    sepochs::Vector{Int}
-    repochs::Vector{Int}
-    active::Vector{Bool}
-    stimestamps::Vector{Int}
-    latency::Vector{Float64}
+    ranks::Vector{Int} # MPI ranks of the workers managed by the pool
+    sreqs::Vector{MPI.Request} # MPI send requests for each worker
+    rreqs::Vector{MPI.Request} # MPI receive requests for each worker
+    sepochs::Vector{Int} # epoch that transmission was initiated at for each worker
+    repochs::Vector{Int} # send epoch corresponding to the most recently received result for each worker
+    active::Vector{Bool} # false for workers with no current computing task
+    stimestamps::Vector{Int} # time when transmission was initiated for each worker 
+    latency::Vector{Float64} # latency of individual workers
     nwait::Int # default number of workers to wait for
     epoch::Int # current epoch
     function AsyncPool(ranks::Vector{<:Integer}; epoch0::Integer=0, nwait=length(ranks))
