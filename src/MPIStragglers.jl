@@ -70,11 +70,11 @@ function Base.asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::Abstra
     mod(length(recvbuf), comm_size) == 0 || throw(DimensionMismatch("The length of recvbuf and irecvbuf must be a multiple of the number of workers"))
 
     # send/receive buffers for each worker
-    sl = length(sendbuf)
-    rl = div(length(irecvbuf), comm_size)
-    isendbufs = [view(isendbuf, (i-1)*sl+1:i*sl) for i in 1:comm_size]
-    irecvbufs = [view(irecvbuf, (i-1)*rl+1:i*rl) for i in 1:comm_size]
-    recvbufs = [view(recvbuf, (i-1)*rl+1:i*rl) for i in 1:comm_size]
+    sl = sizeof(sendbuf)
+    rl = div(sizeof(irecvbuf), comm_size)
+    isendbufs = [view(reinterpret(UInt8, isendbuf), (i-1)*sl+1:i*sl) for i in 1:comm_size]
+    irecvbufs = [view(reinterpret(UInt8, irecvbuf), (i-1)*rl+1:i*rl) for i in 1:comm_size]    
+    recvbufs = [view(reinterpret(UInt8, recvbuf), (i-1)*rl+1:i*rl) for i in 1:comm_size]
 
     # each call to asyncmap! is the start of a new epoch
     pool.epoch = epoch
@@ -93,7 +93,7 @@ function Base.asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::Abstra
         rank = pool.ranks[i]
 
         # copy send data to a worker-specific buffer to ensure the data isn't changed while sending
-        isendbufs[i] .= view(sendbuf, :)
+        isendbufs[i] .= view(reinterpret(UInt8, sendbuf), :)
 
         # remember at what epoch data was sent
         pool.sepochs[i] = pool.epoch
@@ -138,7 +138,7 @@ function Base.asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::Abstra
                 nrecv += 1
                 pool.active[i] = false
             else
-                isendbufs[i] .= view(sendbuf, :)
+                isendbufs[i] .= reinterpret(UInt8, view(sendbuf, :))
                 pool.sepochs[i] = pool.epoch
                 pool.sreqs[i] = MPI.Isend(isendbufs[i], rank, tag, comm)
                 pool.rreqs[i] = MPI.Irecv!(irecvbufs[i], rank, tag, comm)
@@ -166,9 +166,9 @@ function waitall!(pool::AsyncPool, recvbuf::AbstractArray, irecvbuf::AbstractArr
     end
 
     # receive buffers for each worker
-    rl = div(length(irecvbuf), comm_size)
-    irecvbufs = [view(irecvbuf, (i-1)*rl+1:i*rl) for i in 1:comm_size]
-    recvbufs = [view(recvbuf, (i-1)*rl+1:i*rl) for i in 1:comm_size]
+    rl = div(sizeof(irecvbuf), comm_size)
+    irecvbufs = [view(reinterpret(UInt8, irecvbuf), (i-1)*rl+1:i*rl) for i in 1:comm_size]    
+    recvbufs = [view(reinterpret(UInt8, recvbuf), (i-1)*rl+1:i*rl) for i in 1:comm_size]    
 
     # receive from all active workers
     MPI.Waitall!(pool.rreqs)
