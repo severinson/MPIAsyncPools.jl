@@ -2,22 +2,22 @@ module MPIStragglers
 
 using MPI
 
-export StragglerPool, kmap!
+export AsyncPool, asyncmap!
 
 """
 
-    StragglerPool(ranks::Vector{<:Integer}; epoch0::Integer=0, nwait=length(ranks))
+    AsyncPool(ranks::Vector{<:Integer}; epoch0::Integer=0, nwait=length(ranks))
 
 Used to manage a pool of straggling workers that communicate over MPI. Stores the state required 
-for `kmap!`. `nwait` is the default number of workers to wait for when calling `kmap!` and `epoch0`
-is the epoch of the first iteration.
+for `asyncmap!`. `nwait` is the default number of workers to wait for when calling `asyncmap!` 
+and `epoch0` is the epoch of the first iteration.
 
 ```julia
-StragglerPool(n)            # create a pool composed of n workers with ranks 1:n
-StragglerPool([1, 4, 5])    # create a pool composed of 3 workers with ranks [1, 4, 5]
+AsyncPool(n)            # create a pool composed of n workers with ranks 1:n
+AsyncPool([1, 4, 5])    # create a pool composed of 3 workers with ranks [1, 4, 5]
 ```
 """
-struct StragglerPool
+struct AsyncPool
     ranks::Vector{Int}
     sreqs::Vector{MPI.Request}
     rreqs::Vector{MPI.Request}
@@ -25,7 +25,7 @@ struct StragglerPool
     repochs::Vector{Int}
     active::Vector{Bool}
     nwait::Integer # default number of workers to wait for
-    function StragglerPool(ranks::Vector{<:Integer}; epoch0::Integer=0, nwait=length(ranks))
+    function AsyncPool(ranks::Vector{<:Integer}; epoch0::Integer=0, nwait=length(ranks))
         n = length(ranks)
         new(copy(ranks),
             Vector{MPI.Request}(undef, n), Vector{MPI.Request}(undef, n),
@@ -35,10 +35,10 @@ struct StragglerPool
     end
 end
 
-StragglerPool(n::Integer, args...; kwargs...) = StragglerPool(collect(1:n), args...; kwargs...)
+AsyncPool(n::Integer, args...; kwargs...) = AsyncPool(collect(1:n), args...; kwargs...)
 
 """
-    kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, nwait::Union{<:Integer,Function}, epoch::Integer, pool::StragglerPool, comm::MPI.Comm)
+    asyncmap!(sendbuf, recvbuf, isendbuf, irecvbuf, nwait::Union{<:Integer,Function}, epoch::Integer, pool::AsyncPool, comm::MPI.Comm)
 
 Send the data in `sendbuf` asynchronously (via `MPI.Isend`) to all workers and wait for some of
 them to respond (via a corresponding `MPI.Isend`). If `nwait` is an integer, this function returns 
@@ -58,7 +58,7 @@ be changed or accessed outside of it. The length of `isendbuf` must be equal to 
 `sendbuf` multiplied by the number of workers, and `irecvbuf` must have length equal to that of 
 `recvbuf`.
 """
-function kmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, nwait::Union{<:Integer,Function}, epoch::Integer, pool::StragglerPool, comm::MPI.Comm; tag::Integer=0)
+function asyncmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, nwait::Union{<:Integer,Function}, epoch::Integer, pool::AsyncPool, comm::MPI.Comm; tag::Integer=0)
     comm_size = length(pool.ranks)
     if typeof(nwait) <: Integer
         0 <= nwait <= comm_size || throw(ArgumentError("nwait must be in the range [0, length(pool.ranks)], but is $nwait"))
@@ -146,6 +146,6 @@ function kmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::Abstrac
     return pool.repochs
 end
 
-kmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, epoch::Integer, pool::StragglerPool, comm::MPI.Comm; tag::Integer=0) = kmap!(sendbuf, recvbuf, isendbuf, irecvbuf, pool.nwait, epoch, pool, comm; tag)
+asyncmap!(sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, epoch::Integer, pool::AsyncPool, comm::MPI.Comm; tag::Integer=0) = asyncmap!(sendbuf, recvbuf, isendbuf, irecvbuf, pool.nwait, epoch, pool, comm; tag)
 
 end
