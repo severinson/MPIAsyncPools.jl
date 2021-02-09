@@ -2,7 +2,7 @@ module MPIStragglers
 
 using MPI
 
-export AsyncPool, asyncmap!
+export AsyncPool, asyncmap!, waitall!
 
 """
 
@@ -143,6 +143,41 @@ function Base.asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::Abstra
                 pool.sreqs[i] = MPI.Isend(isendbufs[i], rank, tag, comm)
                 pool.rreqs[i] = MPI.Irecv!(irecvbufs[i], rank, tag, comm)
             end
+        end
+    end
+
+    return pool.repochs
+end
+
+"""
+    waitall!(pool::AsyncPool, recvbuf::AbstractArray, irecvbuf::AbstractArray)
+
+Wait for all workers to respond. All workers are inactive when this function has returned.
+"""
+function waitall!(pool::AsyncPool, recvbuf::AbstractArray, irecvbuf::AbstractArray)
+    comm_size = length(pool.ranks)        
+    isbitstype(eltype(recvbuf)) || throw(ArgumentError("The eltype of sendbuf must be isbits, but is $(eltype(recvbuf))"))
+    sizeof(recvbuf) == sizeof(irecvbuf) || throw(DimensionMismatch("recvbuf is of size $(sizeof(recvbuf)) bytes, but irecvbuf is of size $(sizeof(irecvbuf)) bytes"))
+    mod(length(recvbuf), comm_size) == 0 || throw(DimensionMismatch("The length of recvbuf and irecvbuf must be a multiple of the number of workers"))
+
+    nactive = sum(pool.active)
+    if nactive == 0
+        return pool.repochs
+    end
+
+    # receive buffers for each worker
+    rl = div(length(irecvbuf), comm_size)
+    irecvbufs = [view(irecvbuf, (i-1)*rl+1:i*rl) for i in 1:comm_size]
+    recvbufs = [view(recvbuf, (i-1)*rl+1:i*rl) for i in 1:comm_size]
+
+    # receive from all active workers
+    MPI.Waitall!(pool.rreqs)
+    for i in 1:length(pool.ranks)
+        if pool.active[i]
+            recvbufs[i] .= irecvbufs[i]
+            pool.repochs[i] = pool.sepochs[i]
+            pool.active[i] = false
+            MPI.Wait!(pool.sreqs[i])
         end
     end
 

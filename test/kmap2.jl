@@ -55,15 +55,21 @@ function root_main()
         print("test $rank: response from $from_this_epoch workers in $delay seconds\n")    
     end
 
+    # test that all workers have returned after calling waitall!
+    for epoch in 1:100
+        repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait=1, tag=data_tag)
+        repochs = waitall!(pool, recvbuf, irecvbuf)
+        @test all(pool.active .== false)
+    end
+
     # test using a custom function to determine when asyncmap! should return
     # (in this case that the first worker has returned)
     f = (epoch, repochs) -> repochs[1] == epoch
     for epoch in 101:200
         delay = @elapsed begin
-            # repochs = asyncmap!(sendbuf, recvbuf, isendbuf, irecvbuf, f, epoch, pool, comm; tag=data_tag)
             repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait=f, tag=data_tag)
         end
-        @test repochs[1] == epoch
+        @test repochs[1] == pool.epoch
         print("test $rank: response from the first worker in $delay seconds\n")    
     end
     shutdown(pool)
