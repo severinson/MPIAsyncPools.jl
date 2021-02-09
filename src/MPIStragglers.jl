@@ -4,6 +4,19 @@ using MPI
 
 export StragglerPool, kmap!
 
+"""
+
+    StragglerPool(ranks::Vector{<:Integer}; epoch0::Integer=0, nwait=length(ranks))
+
+Used to manage a pool of straggling workers that communicate over MPI. Stores the state required 
+for `kmap!`. `nwait` is the default number of workers to wait for when calling `kmap!` and `epoch0`
+is the epoch of the first iteration.
+
+```julia
+StragglerPool(n)            # create a pool composed of n workers with ranks 1:n
+StragglerPool([1, 4, 5])    # create a pool composed of 3 workers with ranks [1, 4, 5]
+```
+"""
 struct StragglerPool
     ranks::Vector{Int}
     sreqs::Vector{MPI.Request}
