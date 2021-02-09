@@ -18,8 +18,7 @@ if isroot()
     recvbuf = Vector{Float64}(undef, nworkers)
     irecvbuf = copy(recvbuf)
     nwait = nworkers
-    epoch = 0
-    repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait, epoch, tag)
+    repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait, tag)
     @test recvbuf ≈ collect(1:nworkers)
 else    
     recvbuf = Vector{Float64}(undef, 1)

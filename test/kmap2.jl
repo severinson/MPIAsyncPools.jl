@@ -33,7 +33,7 @@ function root_main()
     for epoch in 1:100
         sendbuf[1] = epoch
         delay = @elapsed begin
-            repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait, epoch, tag=data_tag)
+            repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait, tag=data_tag)
         end
         from_this_epoch = 0
         for i in 1:nworkers
@@ -61,7 +61,7 @@ function root_main()
     for epoch in 101:200
         delay = @elapsed begin
             # repochs = asyncmap!(sendbuf, recvbuf, isendbuf, irecvbuf, f, epoch, pool, comm; tag=data_tag)
-            repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait=f, epoch, tag=data_tag)            
+            repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait=f, tag=data_tag)
         end
         @test repochs[1] == epoch
         print("test $rank: response from the first worker in $delay seconds\n")    
