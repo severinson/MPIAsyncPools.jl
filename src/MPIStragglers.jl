@@ -82,6 +82,33 @@ function Base.asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::Abstra
     # each call to asyncmap! is the start of a new epoch
     pool.epoch = epoch
 
+    # process any results received since this function was last called
+    # this is to make iterations as independent as possible
+    for i in 1:comm_size
+
+        # nothing to do for inactive workers
+        if !pool.active[i]
+            continue
+        end
+
+        # check if we've received something (returns immediately)
+        flag, _ = MPI.Test!(pool.rreqs[i]) 
+        if !flag
+            continue
+        end
+
+        # record latency
+        pool.latency[i] = (time_ns() - pool.stimestamps[i]) / 1e9
+
+        # store the received data and set the epoch
+        recvbufs[i] .= irecvbufs[i]
+        pool.repochs[i] = pool.sepochs[i]
+        pool.active[i] = false
+
+        # cleanup the corresponding send request; should return immediately
+        MPI.Wait!(pool.sreqs[i])
+    end  
+
     # start nonblocking transmission of sendbuf to all inactive workers
     # all workers are active after this loop
     for i in 1:length(pool.ranks)
