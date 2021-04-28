@@ -27,7 +27,6 @@ function root_main()
     recvbufs = [view(recvbuf, (i-1)*3+1:i*3) for i in 1:nworkers]
     irecvbuf = copy(recvbuf)
     nwait = 2
-    print("test $rank: root starting\n")
 
     # test that we have at least nwait responses from the current epoch in each iteration
     for epoch in 1:100
@@ -52,7 +51,6 @@ function root_main()
         end
 
         @test from_this_epoch >= nwait
-        print("test $rank: response from $from_this_epoch workers in $delay seconds\n")
     end
 
     # test that all workers have returned after calling waitall!
@@ -71,7 +69,6 @@ function root_main()
         end
         @test repochs[1] == pool.epoch
         @test isapprox(delay, pool.latency[1], atol=1e-3)
-        print("test $rank: response from the first worker in $delay ($(pool.latency[1])) seconds\n")
     end
     shutdown(pool)
 end
@@ -106,7 +103,6 @@ if isroot()
 else
     worker_main()
 end
-print("test $rank: exiting\n")
 MPI.Barrier(comm)
 if isroot()
     print("All tests pass\n")
