@@ -9,7 +9,7 @@ pool = MPIAsyncPool([1, 2, 4]) # pool consisting of nodes with MPI ranks 1, 2, 4
 pool = MPIAsyncPool(4)         # pool consisting of nodes with MPI ranks 1, 2, 3, 4
 ```
 
-Next, the `asyncmap!` function is used to assign tasks to workers. This function returns once results have been received from the `nwait` fastest workers. Alternatively, one can define a custom condition, e.g., to always wait for worker 1. The docstring of `asyncmap!` is:
+Next, the `asyncmap!` function is used to assign tasks to workers. This function returns once results have been received from the `nwait` fastest workers. Alternatively, one can define a custom condition, e.g., to always wait for worker 1. See the [examples directory](./examples/). The docstring of `asyncmap!` is:
 
 > `asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, comm::MPI.Comm; nwait::Union{<:Integer,Function}=pool.nwait, epoch::Integer=pool.epoch+1, tag::Integer=0)`
 >
