@@ -1,23 +1,27 @@
+"""
+
+For managing a pool of, potentially straggling, workers that communicate with the coordinator using MPI.
+"""
 module MPIStragglers
 
 using MPI
 
-export AsyncPool, asyncmap!, waitall!
+export MPIAsyncPool, waitall!
 
 """
 
-    AsyncPool(ranks::Vector{<:Integer}; epoch0::Integer=0, nwait=length(ranks))
+    MPIAsyncPool(ranks::Vector{<:Integer}; epoch0::Integer=0, nwait::Integer=length(ranks))
 
-Used to manage a pool of straggling workers that communicate over MPI. Stores the state required 
-for `asyncmap!`. `nwait` is the default number of workers to wait for when calling `asyncmap!` 
-and `epoch0` is the epoch of the first iteration.
+Used to manage a pool of, potentially straggling, workers that communicate with the coordinator
+using MPI. `nwait` is the default number of workers to wait for in calls to `asyncmap!` and 
+`epoch0` is the epoch of the first iteration.
 
 ```julia
-AsyncPool(n)            # create a pool composed of n workers with ranks 1:n
-AsyncPool([1, 4, 5])    # create a pool composed of 3 workers with ranks [1, 4, 5]
+MPIAsyncPool(n)             # create a pool composed of n workers with ranks 1:n
+MPIAsyncPool([1, 4, 5])     # create a pool composed of the 3 workers with ranks [1, 4, 5]
 ```
 """
-mutable struct AsyncPool
+mutable struct MPIAsyncPool
     ranks::Vector{Int} # MPI ranks of the workers managed by the pool
     sreqs::Vector{MPI.Request} # MPI send requests for each worker
     rreqs::Vector{MPI.Request} # MPI receive requests for each worker
@@ -28,7 +32,7 @@ mutable struct AsyncPool
     latency::Vector{Float64} # latency of individual workers
     nwait::Int # default number of workers to wait for
     epoch::Int # current epoch
-    function AsyncPool(ranks::Vector{<:Integer}; epoch0::Integer=0, nwait=length(ranks))
+    function MPIAsyncPool(ranks::Vector{<:Integer}; epoch0::Integer=0, nwait::Integer=length(ranks))
         n = length(ranks)
         new(copy(ranks),
             Vector{MPI.Request}(undef, n), Vector{MPI.Request}(undef, n),
@@ -39,10 +43,10 @@ mutable struct AsyncPool
     end
 end
 
-AsyncPool(n::Integer, args...; kwargs...) = AsyncPool(collect(1:n), args...; kwargs...)
+MPIAsyncPool(n::Integer, args...; kwargs...) = MPIAsyncPool(collect(1:n), args...; kwargs...)
 
 """
-    asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, comm::MPI.Comm; nwait::Union{<:Integer,Function}=pool.nwait, epoch::Integer=pool.epoch+1, tag::Integer=0)
+    asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, comm::MPI.Comm; nwait::Union{<:Integer,Function}=pool.nwait, epoch::Integer=pool.epoch+1, tag::Integer=0)
 
 Send the data in `sendbuf` asynchronously (via `MPI.Isend`) to all workers and wait for some of
 them to respond (via a corresponding `MPI.Isend`). If `nwait` is an integer, this function returns 
@@ -61,7 +65,7 @@ be changed or accessed outside of it. The length of `isendbuf` must be equal to 
 `sendbuf` multiplied by the number of workers, and `irecvbuf` must have length equal to that of 
 `recvbuf`.
 """
-function Base.asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, comm::MPI.Comm; nwait::Union{<:Integer,Function}=pool.nwait, epoch::Integer=pool.epoch+1, tag::Integer=0)
+function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, comm::MPI.Comm; nwait::Union{<:Integer,Function}=pool.nwait, epoch::Integer=pool.epoch+1, tag::Integer=0)
     comm_size = length(pool.ranks)
     if typeof(nwait) <: Integer
         0 <= nwait <= comm_size || throw(ArgumentError("nwait must be in the range [0, length(pool.ranks)], but is $nwait"))
@@ -184,11 +188,11 @@ function Base.asyncmap!(pool::AsyncPool, sendbuf::AbstractArray, recvbuf::Abstra
 end
 
 """
-    waitall!(pool::AsyncPool, recvbuf::AbstractArray, irecvbuf::AbstractArray)
+    waitall!(pool::MPIAsyncPool, recvbuf::AbstractArray, irecvbuf::AbstractArray)
 
 Wait for all workers to respond. All workers are inactive when this function has returned.
 """
-function waitall!(pool::AsyncPool, recvbuf::AbstractArray, irecvbuf::AbstractArray)
+function waitall!(pool::MPIAsyncPool, recvbuf::AbstractArray, irecvbuf::AbstractArray)
     comm_size = length(pool.ranks)        
     isbitstype(eltype(recvbuf)) || throw(ArgumentError("The eltype of sendbuf must be isbits, but is $(eltype(recvbuf))"))
     sizeof(recvbuf) == sizeof(irecvbuf) || throw(DimensionMismatch("recvbuf is of size $(sizeof(recvbuf)) bytes, but irecvbuf is of size $(sizeof(irecvbuf)) bytes"))

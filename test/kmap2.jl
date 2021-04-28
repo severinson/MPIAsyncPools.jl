@@ -11,14 +11,14 @@ isroot() = MPI.Comm_rank(comm) == root
 const data_tag = 0
 const control_tag = 1
 
-function shutdown(pool::AsyncPool)
+function shutdown(pool::MPIAsyncPool)
     for i in pool.ranks
         MPI.Isend(zeros(1), i, control_tag, comm)
     end
 end
 
 function root_main()
-    pool = AsyncPool(nworkers)
+    pool = MPIAsyncPool(nworkers)
     @test pool.ranks == collect(1:nworkers)
 
     sendbuf = Vector{Float64}(undef, 1)

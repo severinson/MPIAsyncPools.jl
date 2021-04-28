@@ -12,7 +12,7 @@ const count = 1
 const tag = 0
 
 if isroot()
-    pool = AsyncPool(nworkers)
+    pool = MPIAsyncPool(nworkers)
     sendbuf = repeat([3.14], count)
     isendbuf = zeros(eltype(sendbuf), nworkers*length(sendbuf))
     recvbuf = Vector{Float64}(undef, nworkers)
