@@ -1,6 +1,6 @@
 # MPIAsyncPools.jl
 
-This package is for assigning tasks to workers in distributed systems composed of a coordinator process and multiple worker processes. Each worker communicates with the coordinator using MPI, and the results computed by the workers are collected by the coordinator in an asynchronous manner. This is particularly useful for high-performance computing applications in clusters with straggling workers, i.e., where the latency may differ significantly between workers and iterations.
+This package is for assigning tasks to workers in a data-parellel setting for distributed systems composed of a coordinator process and multiple worker processes. Each worker communicates with the coordinator using MPI, and the results computed by the workers are collected by the coordinator in an asynchronous manner. This is particularly useful for high-performance computing applications in clusters with straggling workers, i.e., where the latency may differ significantly between workers and iterations.
 
 First, one creates a worker pool from the MPI ranks of the worker processes. For example:
 
