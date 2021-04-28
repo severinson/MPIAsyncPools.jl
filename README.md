@@ -5,8 +5,8 @@ This package is for assigning tasks to workers in distributed systems composed o
 First, one creates a worker pool from the MPI ranks of the workers. For example:
 
 ```julia
-pool = StragglerPool([1, 2, 3]) # pool consisting of nodes with MPI ranks 1, 2, 3
-pool = StragglerPool(4)         # pool consisting of nodes with MPI ranks 1, 2, 3, 4
+pool = MPIAsyncPool([1, 2, 4]) # pool consisting of nodes with MPI ranks 1, 2, 4
+pool = MPIAsyncPool(4)         # pool consisting of nodes with MPI ranks 1, 2, 3, 4
 ```
 
 Next, the `asyncmap!` function is used to assign tasks to workers. This function returns once results have been received from the `nwait` fastest workers. Alternatively, one can define a custom condition, e.g., to always wait for worker 1.
