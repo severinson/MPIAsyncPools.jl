@@ -1,6 +1,6 @@
-using MPIStragglers
-using Test
 using MPI
+using MPIAsyncPools
+using Test
 
 function parse_line(line::AbstractString; prefix="test")
     if !startswith(line, prefix)
@@ -16,7 +16,7 @@ end
 
 mpitestexec(n::Integer, file::String) = mpiexec(cmd -> read(`$cmd -n $n --mca btl ^openib julia --project $file`, String))
 
-@testset "MPIStragglers.jl" begin
+@testset "MPIAsyncPools.jl" begin
     n = 3
     for line in split(mpitestexec(n, "kmap1.jl"), "\n")
         rank, output = parse_line(line)

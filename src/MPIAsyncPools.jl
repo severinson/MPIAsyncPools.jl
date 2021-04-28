@@ -2,7 +2,7 @@
 
 For managing a pool of, potentially straggling, workers that communicate with the coordinator using MPI.
 """
-module MPIStragglers
+module MPIAsyncPools
 
 using MPI
 

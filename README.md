@@ -1,4 +1,4 @@
-# MPIStragglers.jl
+# MPIAsyncPools.jl
 
 This package is for assigning tasks to workers in distributed systems composed of a coordinator process and multiple worker processes. Each worker communicates with the coordinator using MPI, and the results computed by the workers are collected by the coordinator in an asynchronous manner. This is particularly useful for high-performance computing applications in clusters with straggling workers, i.e., where the latency may differ significantly between workers and iterations.
 

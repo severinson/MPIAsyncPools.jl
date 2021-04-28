@@ -1,5 +1,5 @@
 using MPI
-using MPIStragglers
+using MPIAsyncPools
 using Test
 
 MPI.Init()

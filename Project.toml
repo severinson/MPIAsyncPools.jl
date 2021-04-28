@@ -1,4 +1,4 @@
-name = "MPIStragglers"
+name = "MPIAsyncPools"
 uuid = "71dbed6d-20b0-48c6-bb22-c3e423edce76"
 authors = ["Albin Severinson <albin@severinson.org> and contributors"]
 version = "0.1.0"
