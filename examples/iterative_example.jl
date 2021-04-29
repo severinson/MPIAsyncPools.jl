@@ -35,7 +35,7 @@ function coordinator_main()
     recvbufs = [view(recvbuf, (i-1)*n+1:i*n) for i in 1:nworkers]
 
     for epoch in 1:10
-        sends = Vector{UInt8}("hello from coordinator, epoch $epoch")
+        sends = Vector{UInt8}("hello from coordinator on $(gethostname()), epoch $epoch")
         sendbuf[1:length(sends)] .= sends
         repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; epoch, nwait=1, tag=data_tag)
         for i in 1:nworkers
@@ -74,7 +74,7 @@ function worker_main()
         sleep(rand()) # simulate performing a computation        
         recs = String(recvbuf[:])
         println("[worker $rank]\t\treceived from coordinator\t$recs")
-        sends = Vector{UInt8}("hello from worker $rank, iteration $i")
+        sends = Vector{UInt8}("hello from worker $rank on $(gethostname()), iteration $i")
         sendbuf[1:length(sends)] .= sends
         MPI.Isend(sendbuf, root, data_tag, comm)
         i += 1
