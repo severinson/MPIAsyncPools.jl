@@ -141,7 +141,6 @@ function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::Abs
     # continually send and receive until,
     # 1) if nwait is an integer, we've received nwait results from this epoch, or
     # 2) if nwait is a function, when nwait(epoch, repochs) evaluates to true.
-    # at least k workers are inactive after this loop
     nrecv = 0
     while true
 
@@ -157,34 +156,57 @@ function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::Abs
             error("nwait must be either an Integer or a Function, but is a $(typeof(nwait))")
         end
 
-        # block until we've received a response
-        i, _ = MPI.Waitany!(pool.rreqs)
+        # block until we've received at least one response
+        indices, _ = MPI.Waitsome!(pool.rreqs)
+
+        # process all responses
+        for i in indices
+
+            # record latency
+            pool.latency[i] = (time_ns() - pool.stimestamps[i]) / 1e9
+
+            # store the received data and set the epoch            
+            recvbufs[i] .= irecvbufs[i]
+            pool.repochs[i] = pool.sepochs[i]
+
+            # cleanup the corresponding send request; should return immediately
+            MPI.Wait!(pool.sreqs[i])
+
+            # only receives initiated this epoch count towards completion
+            if pool.repochs[i] == pool.epoch
+                nrecv += 1
+                pool.active[i] = false
+            else
+                isendbufs[i] .= view(reinterpret(UInt8, sendbuf), :)
+                pool.sepochs[i] = pool.epoch
+                rank = pool.ranks[i]           
+                pool.stimestamps[i] = time_ns()
+                pool.sreqs[i] = MPI.Isend(isendbufs[i], rank, tag, comm)
+                pool.rreqs[i] = MPI.Irecv!(irecvbufs[i], rank, tag, comm)
+            end
+        end
+    end
+
+    # opportunistically process any responses received since evaliuation of the exit condition
+    # (does not block)
+    indices, _ = MPI.Testsome!(pool.rreqs)
+    for i in indices
 
         # record latency
         pool.latency[i] = (time_ns() - pool.stimestamps[i]) / 1e9
 
-        # store the received data and set the epoch            
+        # store the received data and set the epoch
         recvbufs[i] .= irecvbufs[i]
         pool.repochs[i] = pool.sepochs[i]
 
         # cleanup the corresponding send request; should return immediately
         MPI.Wait!(pool.sreqs[i])
 
-        # only receives initiated this epoch count towards completion
-        if pool.repochs[i] == pool.epoch
-            nrecv += 1
-            pool.active[i] = false
-        else
-            isendbufs[i] .= view(reinterpret(UInt8, sendbuf), :)
-            pool.sepochs[i] = pool.epoch
-            rank = pool.ranks[i]           
-            pool.stimestamps[i] = time_ns()
-            pool.sreqs[i] = MPI.Isend(isendbufs[i], rank, tag, comm)
-            pool.rreqs[i] = MPI.Irecv!(irecvbufs[i], rank, tag, comm)
-        end
+        # mark as no longer active
+        pool.active[i] = false
     end
 
-    return pool.repochs
+    pool.repochs
 end
 
 """
