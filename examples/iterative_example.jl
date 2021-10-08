@@ -18,6 +18,7 @@ function coordinator_main()
     
     # worker pool and communication buffers
     nworkers = MPI.Comm_size(comm) - 1
+    nwait = 1
     pool = MPIAsyncPool(nworkers)
     
     # combined buffer for data received from all workers
@@ -37,7 +38,7 @@ function coordinator_main()
     for epoch in 1:10
         sends = Vector{UInt8}("hello from coordinator on $(gethostname()), epoch $epoch")
         sendbuf[1:length(sends)] .= sends
-        repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; epoch, nwait=1, tag=data_tag)
+        repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; epoch, nwait, tag=data_tag)
         for i in 1:nworkers
             if repochs[i] == epoch
                 recs = String(recvbufs[i])
@@ -47,9 +48,10 @@ function coordinator_main()
     end
 
     # signal all workers to close
+    waitall!(pool, recvbuf, irecvbuf)
     for i in pool.ranks
-        MPI.Isend(zeros(1), i, control_tag, comm)
-    end        
+        MPI.Send(zeros(1), i, control_tag, comm)
+    end
 end
 
 function worker_main()
@@ -69,6 +71,8 @@ function worker_main()
         rreq = MPI.Irecv!(recvbuf, root, data_tag, comm)
         index, _ = MPI.Waitany!([crreq, rreq])
         if index == 1 # exit message on control channel
+            MPI.Cancel!(rreq) # mark the rreq for cancellation
+            MPI.Test!(rreq) # cleanup the data receive request
             break
         end
         sleep(rand()) # simulate performing a computation        
@@ -76,7 +80,7 @@ function worker_main()
         println("[worker $rank]\t\treceived from coordinator\t$recs")
         sends = Vector{UInt8}("hello from worker $rank on $(gethostname()), iteration $i")
         sendbuf[1:length(sends)] .= sends
-        MPI.Isend(sendbuf, root, data_tag, comm)
+        MPI.Send(sendbuf, root, data_tag, comm)
         i += 1
     end
 end
@@ -87,3 +91,4 @@ else
     worker_main()
 end
 MPI.Barrier(comm)
+MPI.Finalize()
