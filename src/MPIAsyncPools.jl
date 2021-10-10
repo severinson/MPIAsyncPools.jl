@@ -65,7 +65,7 @@ be changed or accessed outside of it. The length of `isendbuf` must be equal to 
 `sendbuf` multiplied by the number of workers, and `irecvbuf` must have length equal to that of 
 `recvbuf`.
 """
-function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, comm::MPI.Comm; nwait::Union{<:Integer,Function}=pool.nwait, epoch::Integer=pool.epoch+1, tag::Integer=0)
+function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, comm::MPI.Comm; nwait::Union{<:Integer,Function}=pool.nwait, epoch::Integer=pool.epoch+1, tag::Integer=0, recvf::Union{Nothing,Function}=nothing)
     comm_size = length(pool.ranks)
     if typeof(nwait) <: Integer
         0 <= nwait <= comm_size || throw(ArgumentError("nwait must be in the range [0, length(pool.ranks)], but is $nwait"))
@@ -142,6 +142,11 @@ function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::Abs
             recvbufs[i] .= irecvbufs[i]
             pool.repochs[i] = pool.sepochs[i]
 
+            # call the callback function (if one is provided)
+            if recvf isa Function
+                recvf(i, pool.epoch, pool.repochs[i], recvbufs[i])
+            end
+
             # cleanup the corresponding send request; should return immediately
             MPI.Wait!(pool.sreqs[i])
 
@@ -172,6 +177,11 @@ function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::Abs
         recvbufs[i] .= irecvbufs[i]
         pool.repochs[i] = pool.sepochs[i]
 
+        # call the callback function (if one is provided)
+        if recvf isa Function
+            recvf(i, pool.epoch, pool.repochs[i], recvbufs[i])
+        end        
+
         # cleanup the corresponding send request; should return immediately
         MPI.Wait!(pool.sreqs[i])
 
@@ -187,7 +197,7 @@ end
 
 Wait for all workers to respond. All workers are inactive when this function has returned.
 """
-function waitall!(pool::MPIAsyncPool, recvbuf::AbstractArray, irecvbuf::AbstractArray)
+function waitall!(pool::MPIAsyncPool, recvbuf::AbstractArray, irecvbuf::AbstractArray; recvf::Union{Nothing,Function}=nothing)
     comm_size = length(pool.ranks)        
     isbitstype(eltype(recvbuf)) || throw(ArgumentError("The eltype of sendbuf must be isbits, but is $(eltype(recvbuf))"))
     sizeof(recvbuf) == sizeof(irecvbuf) || throw(DimensionMismatch("recvbuf is of size $(sizeof(recvbuf)) bytes, but irecvbuf is of size $(sizeof(irecvbuf)) bytes"))
@@ -211,11 +221,13 @@ function waitall!(pool::MPIAsyncPool, recvbuf::AbstractArray, irecvbuf::Abstract
             recvbufs[i] .= irecvbufs[i]
             pool.repochs[i] = pool.sepochs[i]
             pool.active[i] = false
+            if recvf isa Function
+                recvf(i, pool.epoch, pool.repochs[i], recvbufs[i])
+            end            
             MPI.Wait!(pool.sreqs[i])
         end
     end
-
-    return pool.repochs
+    pool.repochs
 end
 
 end

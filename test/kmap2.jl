@@ -28,11 +28,33 @@ function root_main()
     irecvbuf = copy(recvbuf)
     nwait = 2
 
+    # setup a callback to test that it's called once per receive
+    recvs = Set{Int}()
+    function recvf(i, epoch, repoch, recvbuf)
+        buf = reinterpret(Float64, recvbuf)
+        @test length(buf) == 3
+        rank, t, sepoch = buf
+        @test i == rank
+        @test sepoch == repoch
+        if repoch != epoch # ignore state results
+            return
+        end
+        if i in recvs
+            error("recvf was called twice for worker $i")
+        end
+        push!(recvs, i)
+        return
+    end
+
     # test that we have at least nwait responses from the current epoch in each iteration
     for epoch in 1:100
+
+        # empty the set for each iteration
+        empty!(recvs)
+
         sendbuf[1] = epoch
         delay = @elapsed begin
-            repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait, tag=data_tag)
+            repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait, tag=data_tag, recvf)
         end
         from_this_epoch = 0
         for i in 1:nworkers
@@ -49,8 +71,15 @@ function root_main()
             # test that workers echo what was sent to them
             @test wepoch == repochs[i]
         end
-
         @test from_this_epoch >= nwait
+
+        # test that the callback was called once per receive
+        @test length(recvs) == from_this_epoch
+        for i in 1:nworkers
+            if repochs[i] == epoch
+                @test i in recvs
+            end
+        end
     end
 
     # test that all workers have returned after calling waitall!
