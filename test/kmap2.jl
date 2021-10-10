@@ -97,7 +97,6 @@ function root_main()
             repochs = asyncmap!(pool, sendbuf, recvbuf, isendbuf, irecvbuf, comm; nwait=f, tag=data_tag)
         end
         @test repochs[1] == pool.epoch
-        @test isapprox(delay, pool.latency[1], atol=1e-3)
     end
     shutdown(pool)
 end

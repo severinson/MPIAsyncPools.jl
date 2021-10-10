@@ -65,7 +65,7 @@ be changed or accessed outside of it. The length of `isendbuf` must be equal to 
 `sendbuf` multiplied by the number of workers, and `irecvbuf` must have length equal to that of 
 `recvbuf`.
 """
-function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, comm::MPI.Comm; nwait::Union{<:Integer,Function}=pool.nwait, epoch::Integer=pool.epoch+1, tag::Integer=0, recvf::Union{Nothing,Function}=nothing)
+function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::AbstractArray, isendbuf::AbstractArray, irecvbuf::AbstractArray, comm::MPI.Comm; nwait::Union{<:Integer,Function}=pool.nwait, epoch::Integer=pool.epoch+1, tag::Integer=0, recvf::Union{Nothing,Function}=nothing, latency_tol::Real=1e-2)
     comm_size = length(pool.ranks)
     if typeof(nwait) <: Integer
         0 <= nwait <= comm_size || throw(ArgumentError("nwait must be in the range [0, length(pool.ranks)], but is $nwait"))
@@ -75,6 +75,7 @@ function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::Abs
     sizeof(isendbuf) == comm_size*sizeof(sendbuf) || throw(DimensionMismatch("sendbuf is of size $(sizeof(sendbuf)) bytes, but isendbuf is of size $(sizeof(isendbuf)) bytes when $(comm_size*sizeof(sendbuf)) bytes are needed"))
     sizeof(recvbuf) == sizeof(irecvbuf) || throw(DimensionMismatch("recvbuf is of size $(sizeof(recvbuf)) bytes, but irecvbuf is of size $(sizeof(irecvbuf)) bytes"))
     mod(length(recvbuf), comm_size) == 0 || throw(DimensionMismatch("The length of recvbuf and irecvbuf must be a multiple of the number of workers"))
+    0 <= latency_tol || throw(ArgumentError("latency_tol must be non-negative, but is $latency_tol"))
 
     # send/receive buffers for each worker
     sl = sizeof(sendbuf)
@@ -111,11 +112,17 @@ function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::Abs
         pool.rreqs[i] = MPI.Irecv!(irecvbufs[i], rank, tag, comm)
     end
 
+    # track the number of active workers
+    nactive = comm_size
+
+    # record the start time to later compute the overall latency
+    time0 = time_ns()
+
     # continually send and receive until,
     # 1) if nwait is an integer, we've received nwait results from this epoch, or
     # 2) if nwait is a function, when nwait(epoch, repochs) evaluates to true.
     nrecv = 0
-    while true
+    while 0 < nactive
 
         if typeof(nwait) <: Integer
             if nrecv >= nwait
@@ -154,6 +161,7 @@ function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::Abs
             if pool.repochs[i] == pool.epoch
                 nrecv += 1
                 pool.active[i] = false
+                nactive -= 1
             else
                 isendbufs[i] .= view(reinterpret(UInt8, sendbuf), :)
                 pool.sepochs[i] = pool.epoch
@@ -165,30 +173,36 @@ function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::Abs
         end
     end
 
-    # opportunistically process any responses received since evaliuation of the exit condition
-    # (does not block)
-    indices, _ = MPI.Testsome!(pool.rreqs)
-    for i in indices
+    # ns between starting to wait for workers until the exit condition evaluated to true
+    latency = float(time_ns() - time0)
+    extra_latency = latency
 
-        # record latency
-        pool.latency[i] = (time_ns() - pool.stimestamps[i]) / 1e9
+    # process any responses received within (latency * (1 + latency_tol)) since the exit condition evaluated to true
+    while 0 < nactive && extra_latency <= latency * (1 + latency_tol)
+        extra_latency = float(time_ns() - time0)
+        indices, _ = MPI.Waitsome!(pool.rreqs)
+        for i in indices
 
-        # store the received data and set the epoch
-        recvbufs[i] .= irecvbufs[i]
-        pool.repochs[i] = pool.sepochs[i]
+            # record latency
+            pool.latency[i] = (time_ns() - pool.stimestamps[i]) / 1e9
 
-        # call the callback function (if one is provided)
-        if recvf isa Function
-            recvf(i, pool.epoch, pool.repochs[i], recvbufs[i])
-        end        
+            # store the received data and set the epoch
+            recvbufs[i] .= irecvbufs[i]
+            pool.repochs[i] = pool.sepochs[i]
 
-        # cleanup the corresponding send request; should return immediately
-        MPI.Wait!(pool.sreqs[i])
+            # call the callback function (if one is provided)
+            if recvf isa Function
+                recvf(i, pool.epoch, pool.repochs[i], recvbufs[i])
+            end
 
-        # mark as no longer active
-        pool.active[i] = false
+            # cleanup the corresponding send request; should return immediately
+            MPI.Wait!(pool.sreqs[i])
+
+            # mark as no longer active
+            pool.active[i] = false
+            nactive -= 1
+        end
     end
-
     pool.repochs
 end
 
