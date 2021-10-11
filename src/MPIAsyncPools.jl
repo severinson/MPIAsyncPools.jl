@@ -177,7 +177,7 @@ function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::Abs
     # process any responses received within (latency * (1 + latency_tol)) since the exit condition evaluated to true
     while 0 < nactive && extra_latency <= latency * (1 + latency_tol)
         extra_latency = float(time_ns() - time0)
-        indices, _ = MPI.Waitsome!(pool.rreqs)
+        indices, _ = MPI.Testsome!(pool.rreqs)
         for i in indices
 
             # record latency
