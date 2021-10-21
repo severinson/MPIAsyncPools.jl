@@ -139,38 +139,41 @@ function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::Abs
         end
 
         # block until we've received a response
-        i, _ = MPI.Waitany!(pool.rreqs)
+        indices, _ = MPI.Waitsome!(pool.rreqs)
+        timestamp = time_ns()
+        for i in indices
 
-        # record latency
-        pool.latency[i] = (time_ns() - pool.stimestamps[i]) / 1e9
+            # record latency
+            pool.latency[i] = (timestamp - pool.stimestamps[i]) / 1e9
 
-        # process previous response before overwriting it if we've already received from this worker
-        if recvf isa Function && pool.responded[i]
-            recvf(i, pool.epoch, pool.repochs[i], recvbufs[i])
-        end
+            # process previous response before overwriting it if we've already received from this worker
+            if recvf isa Function && pool.responded[i]
+                recvf(i, pool.epoch, pool.repochs[i], recvbufs[i])
+            end
 
-        # store the received data and set the epoch
-        recvbufs[i] .= irecvbufs[i]
-        pool.repochs[i] = pool.sepochs[i]
+            # store the received data and set the epoch
+            recvbufs[i] .= irecvbufs[i]
+            pool.repochs[i] = pool.sepochs[i]
 
-        # mark the worker as having responded, so that we later can process the reponse
-        pool.responded[i] = true        
+            # mark the worker as having responded, so that we later can process the reponse
+            pool.responded[i] = true        
 
-        # cleanup the corresponding send request; should return immediately
-        MPI.Wait!(pool.sreqs[i])
+            # cleanup the corresponding send request; should return immediately
+            MPI.Wait!(pool.sreqs[i])
 
-        # only receives initiated this epoch count towards completion
-        if pool.repochs[i] == pool.epoch
-            nfresh += 1
-            nactive -= 1
-            pool.active[i] = false
-        else # otherwise send the worker a new task
-            isendbufs[i] .= view(reinterpret(UInt8, sendbuf), :)
-            pool.sepochs[i] = pool.epoch
-            rank = pool.ranks[i]
-            pool.stimestamps[i] = time_ns()
-            pool.sreqs[i] = MPI.Isend(isendbufs[i], rank, tag, comm)
-            pool.rreqs[i] = MPI.Irecv!(irecvbufs[i], rank, tag, comm)
+            # only receives initiated this epoch count towards completion
+            if pool.repochs[i] == pool.epoch
+                nfresh += 1
+                nactive -= 1
+                pool.active[i] = false
+            else # otherwise send the worker a new task
+                isendbufs[i] .= view(reinterpret(UInt8, sendbuf), :)
+                pool.sepochs[i] = pool.epoch
+                rank = pool.ranks[i]
+                pool.stimestamps[i] = time_ns()
+                pool.sreqs[i] = MPI.Isend(isendbufs[i], rank, tag, comm)
+                pool.rreqs[i] = MPI.Irecv!(irecvbufs[i], rank, tag, comm)
+            end
         end
     end
 
@@ -182,10 +185,11 @@ function Base.asyncmap!(pool::MPIAsyncPool, sendbuf::AbstractArray, recvbuf::Abs
     while 0 < nactive && extra_latency <= latency * (1 + latency_tol)
         extra_latency = float(time_ns() - time0)
         indices, _ = MPI.Testsome!(pool.rreqs)
+        timestamp = time_ns()
         for i in indices
 
             # record latency
-            pool.latency[i] = (time_ns() - pool.stimestamps[i]) / 1e9
+            pool.latency[i] = (timestamp - pool.stimestamps[i]) / 1e9
 
             # process previous response before overwriting it if we've already received from this worker
             if recvf isa Function && pool.responded[i]
